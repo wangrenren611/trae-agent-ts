@@ -1,0 +1,36 @@
+llm:
+  provider: anthropic
+  model: claude-3-5-sonnet-20241022
+  api_key: ${ANTHROPIC_API_KEY}
+  max_tokens: 4096
+  temperature: 0.7
+  top_p: 0.9
+agent:
+  max_steps: 30
+  working_directory: .
+  enable_docker: false
+  enable_trajectory_recording: true
+  tools:
+    - edit_tool
+    - bash_tool
+    - json_edit_tool
+    - sequential_thinking_tool
+    - task_done_tool
+docker:
+  image: node:18-alpine
+  volumes:
+    - ./workspace:/workspace
+  environment:
+    NODE_ENV: development
+mcp:
+  servers:
+    - name: example-server
+      command: node
+      args:
+        - server.js
+      env:
+        PORT: '3000'
+logging:
+  level: info
+  file: trae_agent.log
+  format: json
