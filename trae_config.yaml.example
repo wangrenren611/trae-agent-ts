@@ -1,0 +1,51 @@
+# Trae Agent Configuration File
+# Copy this file to trae_config.yaml and customize as needed
+
+# LLM Provider Configuration
+llm:
+  provider: anthropic  # Options: anthropic, openai, google
+  model: claude-3-5-sonnet-20241022
+  api_key: ${ANTHROPIC_API_KEY}  # Set via environment variable
+  # base_url: https://api.anthropic.com  # Optional: custom API endpoint
+  max_tokens: 4096
+  temperature: 0.7
+  top_p: 0.9
+
+# Agent Configuration
+agent:
+  max_steps: 30
+  working_directory: .
+  enable_docker: false
+  enable_trajectory_recording: true
+  trajectory_output_dir: ./trajectories
+  tools:
+    - edit_tool
+    - bash_tool
+    - json_edit_tool
+    - sequential_thinking_tool
+    - task_done_tool
+    - ckg_tool
+
+# Docker Configuration (optional)
+docker:
+  image: node:18-alpine
+  container_name: trae-agent-container
+  volumes:
+    - ./workspace:/workspace
+  environment:
+    NODE_ENV: development
+
+# MCP Server Configuration (optional)
+mcp:
+  servers:
+    - name: example-server
+      command: node
+      args: [server.js]
+      env:
+        PORT: "3000"
+
+# Logging Configuration
+logging:
+  level: info  # Options: debug, info, warn, error
+  file: trae_agent.log  # Optional: log to file
+  format: pretty  # Options: json, pretty
