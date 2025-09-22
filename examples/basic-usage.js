@@ -17,7 +17,7 @@ async function basicExample() {
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "Create a simple Node.js script that prints 'Hello, World!'";
+    const task = "D:\trae-agent-ts\src\tools\ckg-tool.ts代码是D:\trae-agent\trae_agent ts版本实现，请根据代码实现一个ckg-tool工具，并给出实现代码";
     console.log(`📋 Executing task: ${task}`);
 
     const trajectory = await agent.execute(task, 10);

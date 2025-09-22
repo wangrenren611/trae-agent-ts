@@ -84,15 +84,28 @@ export abstract class BaseAgent {
           break;
         }
 
+        // Add assistant message with tool calls if there are any
+        if (step.tool_calls.length > 0) {
+          messages.push({
+            role: 'assistant',
+            content: step.messages[step.messages.length - 1]?.content || '',
+            tool_calls: step.tool_calls,
+          });
+        }
+
         // Add tool results to messages
         for (const result of step.tool_results) {
-          messages.push({
-            role: 'tool',
-            content: JSON.stringify(result),
-            tool_call_id: step.tool_calls.find(call =>
-              call.function.name === this.getToolNameFromResult(result)
-            )?.id || '',
-          });
+          const toolCallId = step.tool_calls.find(call =>
+            call.function.name === this.getToolNameFromResult(result)
+          )?.id;
+          
+          if (toolCallId) {
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify(result),
+              tool_call_id: toolCallId,
+            });
+          }
         }
       }
 
@@ -211,7 +224,18 @@ export abstract class BaseAgent {
   }
 
   protected getToolNameFromResult(result: ToolResult): string {
-    // This is a simplified implementation - in practice, you'd need to track the mapping
+    // Try to extract tool name from result metadata or use a more sophisticated mapping
+    if (result.result && typeof result.result === 'object' && 'tool_name' in result.result) {
+      return (result.result as any).tool_name;
+    }
+    
+    // For now, we'll use a simple approach - match by index
+    // This assumes tool results are in the same order as tool calls
+    const resultIndex = this.currentStep?.tool_results.indexOf(result) ?? -1;
+    if (resultIndex >= 0 && this.currentStep?.tool_calls[resultIndex]) {
+      return this.currentStep.tool_calls[resultIndex].function.name;
+    }
+    
     return 'unknown';
   }
 
