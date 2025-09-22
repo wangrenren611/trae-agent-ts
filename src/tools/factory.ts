@@ -21,7 +21,7 @@ export async function createTools(config: Config, logger: Logger): Promise<ToolE
     'json_edit_tool': () => new JSONEditTool(),
     'sequential_thinking_tool': () => new SequentialThinkingTool(),
     'task_done_tool': () => new TaskDoneTool(),
-    'ckg_tool': () => new CKGTool(logger),
+    'ckg': () => new CKGTool(logger),
   };
 
   // Load built-in tools
