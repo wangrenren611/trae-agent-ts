@@ -3,6 +3,7 @@ import { LLMClient } from './llm-client.js';
 import { AnthropicClient } from './anthropic-client.js';
 import { OpenAIClient } from './openai-client.js';
 import { GoogleClient } from './google-client.js';
+import { DeepSeekClient } from './deepseek-client.js';
 
 export function createLLMClient(provider: LLMProvider): LLMClient {
   const {
@@ -49,9 +50,19 @@ export function createLLMClient(provider: LLMProvider): LLMClient {
         top_p
       );
 
+    case 'deepseek':
+      return new DeepSeekClient(
+        api_key,
+        model || 'deepseek-chat',
+        max_tokens,
+        temperature,
+        top_p,
+        base_url
+      );
+
     default:
       throw new Error(`Unsupported LLM provider: ${name}`);
   }
 }
 
-export { AnthropicClient, OpenAIClient, GoogleClient };
+export { AnthropicClient, OpenAIClient, GoogleClient, DeepSeekClient };

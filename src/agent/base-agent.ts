@@ -72,7 +72,7 @@ export abstract class BaseAgent {
       while (this.isRunning && stepCount < maxSteps) {
         stepCount++;
         this.logger.debug(`Executing step ${stepCount}/${maxSteps}`);
-
+       
         const step = await this.executeStep(messages, stepCount);
         this.trajectory.steps.push(step);
 
@@ -130,6 +130,7 @@ export abstract class BaseAgent {
     try {
       // Get LLM response
       const llmMessages = this.convertToLLMMessages(messages);
+      console.log('llmMessages', llmMessages);
       const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
 
       this.logger.debug('Calling LLM with messages and tools', {
@@ -141,7 +142,7 @@ export abstract class BaseAgent {
         llmMessages,
         availableTools.length > 0 ? availableTools : undefined
       );
-
+      console.log('response', response);
       // Process tool calls
       if (response.tool_calls && response.tool_calls.length > 0) {
         this.currentStep.tool_calls = response.tool_calls;

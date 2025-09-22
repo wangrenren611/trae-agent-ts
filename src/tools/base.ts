@@ -35,7 +35,7 @@ export abstract class ToolExecutor {
     // Validate parameter types
     for (const [paramName, paramValue] of Object.entries(params)) {
       const paramDef = this.definition.parameters.properties[paramName];
-      if (paramDef) {
+      if (paramDef && paramDef.type) {
         this.validateParamType(paramName, paramValue, paramDef.type);
       }
     }

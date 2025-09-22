@@ -3,15 +3,34 @@ import { Logger } from '../utils/logging/logger.js';
 import { ToolExecutor } from './base.js';
 import { globalToolRegistry } from './base.js';
 
+// Import tool classes
+import { EditTool } from './edit-tool.js';
+import { BashTool } from './bash-tool.js';
+import { JSONEditTool } from './json-edit-tool.js';
+import { SequentialThinkingTool } from './sequential-thinking-tool.js';
+import { TaskDoneTool } from './task-done-tool.js';
+import { CKGTool } from './ckg-tool.js';
+
 export async function createTools(config: Config, logger: Logger): Promise<ToolExecutor[]> {
   const tools: ToolExecutor[] = [];
 
-  // Load built-in tools from the global registry
+  // Create tool instances directly
+  const toolMap: Record<string, () => ToolExecutor> = {
+    'edit_tool': () => new EditTool(),
+    'bash_tool': () => new BashTool(),
+    'json_edit_tool': () => new JSONEditTool(),
+    'sequential_thinking_tool': () => new SequentialThinkingTool(),
+    'task_done_tool': () => new TaskDoneTool(),
+    'ckg_tool': () => new CKGTool(logger),
+  };
+
+  // Load built-in tools
   const builtInTools = config.agent.tools || [];
 
   for (const toolName of builtInTools) {
-    const tool = globalToolRegistry.get(toolName);
-    if (tool) {
+    const toolFactory = toolMap[toolName];
+    if (toolFactory) {
+      const tool = toolFactory();
       tools.push(tool);
       logger.debug(`Loaded built-in tool: ${toolName}`);
     } else {
@@ -34,17 +53,7 @@ export async function createTools(config: Config, logger: Logger): Promise<ToolE
     }
   }
 
-  // Load CKG tool if enabled
-  if (config.agent.tools?.includes('ckg_tool')) {
-    try {
-      const { CKGTool } = await import('./ckg-tool.js');
-      const ckgTool = new CKGTool(logger);
-      tools.push(ckgTool);
-      logger.debug('Loaded CKG tool');
-    } catch (error) {
-      logger.error('Failed to load CKG tool:', error);
-    }
-  }
+  // CKG tool is already loaded above in the toolMap
 
   logger.info(`Created ${tools.length} tools`);
   return tools;

@@ -24,12 +24,13 @@ export const ToolCallSchema = z.object({
 export type ToolCall = z.infer<typeof ToolCallSchema>;
 
 export interface ToolParameter {
-  type: string;
+  type?: string;
   description: string;
   required?: boolean;
   properties?: Record<string, ToolParameter>;
   default?: unknown;
   additionalProperties?: boolean | { type: string };
+  items?: ToolParameter;
 }
 
 export interface ToolDefinition {

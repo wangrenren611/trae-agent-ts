@@ -14,7 +14,6 @@ export class TaskDoneTool extends ToolExecutor {
             description: 'Whether the task has been completed successfully',
           },
           result: {
-            type: 'any',
             description: 'The final result or output of the task',
           },
           summary: {
@@ -23,10 +22,12 @@ export class TaskDoneTool extends ToolExecutor {
           },
           files_modified: {
             type: 'array',
+            items: { type: 'string', description: 'File path' },
             description: 'List of files that were modified during the task',
           },
           next_steps: {
             type: 'array',
+            items: { type: 'string', description: 'Next step description' },
             description: 'Suggested next steps or follow-up actions',
           },
         },

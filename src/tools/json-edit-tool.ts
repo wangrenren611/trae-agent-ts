@@ -24,7 +24,6 @@ export class JSONEditTool extends ToolExecutor {
             description: 'Dot-separated path to the JSON property (e.g., "user.name")',
           },
           value: {
-            type: 'any',
             description: 'The value to set (for create/update operations)',
           },
           pretty: {
