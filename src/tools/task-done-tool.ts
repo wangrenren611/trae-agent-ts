@@ -31,17 +31,17 @@ export class TaskDoneTool extends ToolExecutor {
     context: ToolExecutionContext
   ): Promise<ToolResult> {
     try {
+      // 验证参数，因为它们现在是必需的
       this.validateParams(params);
 
-      const {
-        task_completed,
-        result,
-        summary,
-      } = params;
+      // 提取参数
+      const taskCompleted = params.task_completed as boolean;
+      const result = params.result as string;
+      const summary = params.summary as string;
 
-      // Create completion result
+      // 创建完成结果
       const completionResult = {
-        task_completed,
+        task_completed: taskCompleted,
         result,
         summary,
         timestamp: new Date().toISOString(),

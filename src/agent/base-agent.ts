@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { writeFileSync } from 'fs';
 import { LLMClient } from '../utils/llm_clients/llm-client.js';
 import { ToolExecutor, ToolCallExecutor } from '../tools/base.js';
 import { Config } from '../utils/config/config.js';
@@ -25,6 +26,9 @@ export abstract class BaseAgent {
   protected workingDirectory: string;
   protected currentStep: AgentStep | null = null;
   protected isRunning = false;
+  // Track recent assistant messages to detect loops
+  protected recentAssistantMessages: string[] = [];
+  protected maxRecentMessages = 5;
 
   constructor(
     agentId: string,
@@ -56,7 +60,7 @@ export abstract class BaseAgent {
     this.logger.info(`Starting agent execution for task: ${task}`);
     this.trajectory.task = task;
     this.isRunning = true;
-   
+
     try {
       const messages: Message[] = [
         {
@@ -77,7 +81,10 @@ export abstract class BaseAgent {
        
         const step = await this.executeStep(messages, stepCount);
         this.trajectory.steps.push(step);
-        console.log(this.trajectory);
+        
+        // Write trajectory to file for debugging
+        writeFileSync('./trajectory.json', JSON.stringify(this.trajectory, null, 2));
+
         if (step.completed) {
           this.logger.info(`Task completed successfully after ${stepCount} steps`);
           this.trajectory.completed = true;
@@ -88,11 +95,14 @@ export abstract class BaseAgent {
 
         // Add assistant message with tool calls if there are any
         if (step.tool_calls.length > 0) {
-          messages.push({
+          const assistantMessage: Message = {
             role: 'assistant',
             content: step.messages[step.messages.length - 1]?.content || '',
             tool_calls: step.tool_calls,
-          });
+          };
+          
+          messages.push(assistantMessage);
+          this.addRecentMessage(assistantMessage.content);
         }
 
         // Add tool results to messages
@@ -148,7 +158,7 @@ export abstract class BaseAgent {
       // Get LLM response
       const llmMessages = this.convertToLLMMessages(messages);
 
-      // this.logger.info('llmMessages', llmMessages);
+      this.logger.info('llmMessages', llmMessages);
 
       const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
 
@@ -217,10 +227,11 @@ export abstract class BaseAgent {
 
   protected isTaskCompleted(response: LLMResponse, toolResults: ToolResult[]): boolean {
     // Check if any tool result indicates task completion
+    // Only accept task completion if task_completed is explicitly set to true
     const hasTaskDone = toolResults.some(result =>
       result.success && result.result &&
       typeof result.result === 'object' &&
-      'task_completed' in result.result &&
+      'task_completed' in result.result && 
       result.result.task_completed === true
     );
 
@@ -228,11 +239,17 @@ export abstract class BaseAgent {
       return true;
     }
 
-    // Check if LLM response indicates completion
-    const completionKeywords = ['task completed', 'done', 'finished', 'completed'];
-    const content = response.content.toLowerCase();
+    // Don't consider LLM response alone as task completion
+    // Task must be explicitly marked as done via the task_done tool
+    return false;
+  }
 
-    return completionKeywords.some(keyword => content.includes(keyword));
+  // Add recent message to track for loops
+  private addRecentMessage(content: string): void {
+    this.recentAssistantMessages.push(content);
+    if (this.recentAssistantMessages.length > this.maxRecentMessages) {
+      this.recentAssistantMessages.shift();
+    }
   }
 
   protected abstract getSystemPrompt(): string;

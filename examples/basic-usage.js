@@ -17,10 +17,10 @@ async function basicExample() {
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "创建一个名为hello.txt的文件，内容是hello world!";
+    const task = "优化代码D:\\trae-agent-ts\\workspace\\classify-route.ts";
     console.log(`📋 Executing task: ${task}`);
 
-    const trajectory = await agent.execute(task, 10);
+    const trajectory = await agent.execute(task,30);
 
     console.log('\n📊 Results:');
     console.log(`✅ Success: ${trajectory.success}`);

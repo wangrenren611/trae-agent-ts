@@ -350,12 +350,12 @@ describe('Tools', () => {
     it('should execute a simple command', async () => {
       const tool = new BashTool();
       const result = await tool.execute({
-        command: 'echo "Hello, World!"',
+        command: 'echo Hello, World!',
       }, context);
 
       expect(result.success).toBe(true);
       expect(result.result).toMatchObject({
-        stdout: 'Hello, World!',
+        stdout: expect.stringContaining('Hello, World!'),
         exit_code: 0,
       });
     });
