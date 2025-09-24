@@ -71,6 +71,12 @@ export abstract class ToolExecutor {
       stderr,
     };
   }
+
+  // Allow tools to clean up resources
+  async close(): Promise<void> {
+    // Default implementation does nothing
+    return Promise.resolve();
+  }
 }
 
 export class ToolRegistry {
@@ -98,6 +104,73 @@ export class ToolRegistry {
 
   clear(): void {
     this.tools.clear();
+  }
+}
+
+// Tool executor that manages tool execution
+export class ToolCallExecutor {
+  private tools: Map<string, ToolExecutor>;
+  
+  constructor(tools: ToolExecutor[]) {
+    this.tools = new Map();
+    for (const tool of tools) {
+      this.tools.set(this.normalizeName(tool.name), tool);
+    }
+  }
+
+  private normalizeName(name: string): string {
+    // Normalize tool name by making it lowercase and removing underscores
+    return name.toLowerCase().replace(/_/g, '');
+  }
+
+  async executeToolCall(toolCall: ToolCall, context: ToolExecutionContext): Promise<ToolResult> {
+    const normalizedName = this.normalizeName(toolCall.function.name);
+    
+    if (!this.tools.has(normalizedName)) {
+      const availableTools = Array.from(this.tools.keys());
+      return {
+        success: false,
+        error: `Tool '${toolCall.function.name}' not found. Available tools: ${JSON.stringify(availableTools)}`,
+      };
+    }
+
+    const tool = this.tools.get(normalizedName)!;
+    
+    try {
+      let parsedArgs: Record<string, unknown> = {};
+      if (toolCall.function.arguments) {
+        parsedArgs = typeof toolCall.function.arguments === 'string' 
+          ? JSON.parse(toolCall.function.arguments) 
+          : toolCall.function.arguments;
+      }
+      
+      const result = await tool.execute(parsedArgs, context);
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        error: `Error executing tool '${toolCall.function.name}': ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  async parallelToolCall(toolCalls: ToolCall[], context: ToolExecutionContext): Promise<ToolResult[]> {
+    const promises = toolCalls.map(call => this.executeToolCall(call, context));
+    return Promise.all(promises);
+  }
+
+  async sequentialToolCall(toolCalls: ToolCall[], context: ToolExecutionContext): Promise<ToolResult[]> {
+    const results: ToolResult[] = [];
+    for (const call of toolCalls) {
+      const result = await this.executeToolCall(call, context);
+      results.push(result);
+    }
+    return results;
+  }
+
+  async closeTools(): Promise<void> {
+    const closePromises = Array.from(this.tools.values()).map(tool => tool.close());
+    await Promise.all(closePromises);
   }
 }
 

@@ -7,7 +7,7 @@ async function basicExample() {
     // Load configuration
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
-
+  console.log('🔧 Configuration loaded successfully',config);
     // Create agent
     const agent = await Agent.create({
       config,
@@ -17,7 +17,7 @@ async function basicExample() {
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "D:\trae-agent-ts\src\tools\ckg-tool.ts代码是D:\trae-agent\trae_agent ts版本实现，请根据代码实现一个ckg-tool工具，并给出实现代码";
+    const task = "创建一个名为hello.txt的文件，内容是hello world!";
     console.log(`📋 Executing task: ${task}`);
 
     const trajectory = await agent.execute(task, 10);

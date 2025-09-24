@@ -32,8 +32,8 @@ agent:
     - edit_tool
     - bash_tool
     - json_edit_tool
-    - sequential_thinking_tool
-    - task_done_tool
+    - sequentialthinking
+    - task_done
     - ckg_tool
 
 # Docker Configuration (optional)

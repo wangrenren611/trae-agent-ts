@@ -49,7 +49,7 @@ export class ConfigManager {
     if (!configPath) {
       configPath = await ConfigManager.findConfigFile();
     }
-
+    console.log(`Using config file ${configPath}`);
     let configData: DeepPartial<Config> = {};
 
     // Load from file if it exists

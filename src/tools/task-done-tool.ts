@@ -3,9 +3,9 @@ import { ToolResult, ToolExecutionContext } from '../types/index.js';
 
 export class TaskDoneTool extends ToolExecutor {
   constructor() {
-    super('task_done_tool', {
-      name: 'task_done_tool',
-      description: 'Signal task completion and provide final results',
+    super('task_done', {
+      name: 'task_done',
+      description: 'Report the completion of the task. Note that you cannot call this tool before any verification is done. You can write reproduce / test script to verify your solution.',
       parameters: {
         type: 'object',
         properties: {
@@ -19,16 +19,6 @@ export class TaskDoneTool extends ToolExecutor {
           summary: {
             type: 'string',
             description: 'Brief summary of what was accomplished',
-          },
-          files_modified: {
-            type: 'array',
-            items: { type: 'string', description: 'File path' },
-            description: 'List of files that were modified during the task',
-          },
-          next_steps: {
-            type: 'array',
-            items: { type: 'string', description: 'Next step description' },
-            description: 'Suggested next steps or follow-up actions',
           },
         },
         required: ['task_completed', 'result', 'summary'],
@@ -47,8 +37,6 @@ export class TaskDoneTool extends ToolExecutor {
         task_completed,
         result,
         summary,
-        files_modified = [],
-        next_steps = [],
       } = params;
 
       // Create completion result
@@ -56,20 +44,10 @@ export class TaskDoneTool extends ToolExecutor {
         task_completed,
         result,
         summary,
-        files_modified: files_modified as string[],
-        next_steps: next_steps as string[],
         timestamp: new Date().toISOString(),
       };
 
-      if (task_completed) {
-        return this.createSuccessResult(completionResult);
-      } else {
-        return this.createErrorResult(
-          `Task marked as incomplete: ${summary}`,
-          undefined,
-          JSON.stringify(completionResult, null, 2)
-        );
-      }
+      return this.createSuccessResult(completionResult);
     } catch (error) {
       return this.createErrorResult(
         error instanceof Error ? error.message : String(error)

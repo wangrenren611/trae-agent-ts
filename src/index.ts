@@ -4,7 +4,7 @@ export { TraeAgent } from './agent/trae-agent.js';
 export { BaseAgent } from './agent/base-agent.js';
 
 // Tools
-export { ToolExecutor, ToolRegistry, globalToolRegistry } from './tools/base.js';
+export { ToolExecutor, ToolRegistry, ToolCallExecutor, globalToolRegistry } from './tools/base.js';
 export { EditTool } from './tools/edit-tool.js';
 export { BashTool } from './tools/bash-tool.js';
 export { JSONEditTool } from './tools/json-edit-tool.js';
@@ -37,21 +37,16 @@ export type {
   Message,
   ToolCall,
   ToolResult,
+  ToolDefinition,
+  ToolParameter,
   ToolExecutionContext,
-  AgentStep,
-  AgentTrajectory,
+  Config,
   LLMProvider,
   LLMMessage,
   LLMResponse,
-  Config,
-  ToolExecutor as ToolExecutorInterface,
-  ToolDefinition,
+  AgentStep,
+  AgentTrajectory,
   DockerConfig,
   MCPServer,
-} from './types/index.js';
-
-export {
-  ToolError,
-  LLMError,
-  ConfigurationError,
+  LakeviewStep,
 } from './types/index.js';

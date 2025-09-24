@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { LLMClient } from '../utils/llm_clients/llm-client.js';
-import { ToolExecutor } from '../tools/base.js';
+import { ToolExecutor, ToolCallExecutor } from '../tools/base.js';
 import { Config } from '../utils/config/config.js';
 import { Logger } from '../utils/logging/logger.js';
 import {
@@ -18,6 +18,7 @@ export abstract class BaseAgent {
   protected readonly agentId: string;
   protected readonly llmClient: LLMClient;
   protected readonly tools: Map<string, ToolExecutor>;
+  protected readonly toolCallExecutor: ToolCallExecutor;
   protected readonly config: Config;
   protected readonly logger: Logger;
   protected trajectory: AgentTrajectory;
@@ -36,6 +37,7 @@ export abstract class BaseAgent {
     this.agentId = agentId;
     this.llmClient = llmClient;
     this.tools = new Map(tools.map(tool => [tool.name, tool]));
+    this.toolCallExecutor = new ToolCallExecutor(tools);
     this.config = config;
     this.logger = logger;
     this.workingDirectory = workingDirectory;
@@ -54,7 +56,7 @@ export abstract class BaseAgent {
     this.logger.info(`Starting agent execution for task: ${task}`);
     this.trajectory.task = task;
     this.isRunning = true;
-
+   
     try {
       const messages: Message[] = [
         {
@@ -75,7 +77,7 @@ export abstract class BaseAgent {
        
         const step = await this.executeStep(messages, stepCount);
         this.trajectory.steps.push(step);
-
+        console.log(this.trajectory);
         if (step.completed) {
           this.logger.info(`Task completed successfully after ${stepCount} steps`);
           this.trajectory.completed = true;
@@ -125,6 +127,8 @@ export abstract class BaseAgent {
       throw error;
     } finally {
       this.isRunning = false;
+      // Clean up tool resources
+      await this.toolCallExecutor.closeTools();
       this.logger.info(`Agent execution completed. Success: ${this.trajectory.success}`);
     }
   }
@@ -143,7 +147,9 @@ export abstract class BaseAgent {
     try {
       // Get LLM response
       const llmMessages = this.convertToLLMMessages(messages);
-      console.log('llmMessages', llmMessages);
+
+      // this.logger.info('llmMessages', llmMessages);
+
       const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
 
       this.logger.debug('Calling LLM with messages and tools', {
@@ -155,15 +161,19 @@ export abstract class BaseAgent {
         llmMessages,
         availableTools.length > 0 ? availableTools : undefined
       );
-      console.log('response', response);
+     
       // Process tool calls
       if (response.tool_calls && response.tool_calls.length > 0) {
         this.currentStep.tool_calls = response.tool_calls;
 
-        // Execute tool calls in parallel
-        const toolResults = await Promise.all(
-          response.tool_calls.map(call => this.executeTool(call))
-        );
+        // Create execution context
+        const context: ToolExecutionContext = {
+          workingDirectory: this.workingDirectory,
+          environment: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]),
+        };
+
+        // Execute tool calls in parallel using the new ToolCallExecutor
+        const toolResults = await this.toolCallExecutor.parallelToolCall(response.tool_calls, context);
 
         this.currentStep.tool_results = toolResults;
       }
@@ -176,40 +186,6 @@ export abstract class BaseAgent {
       this.logger.error(`Step execution failed: ${error}`);
       this.currentStep.completed = true;
       throw error;
-    }
-  }
-
-  protected async executeTool(toolCall: ToolCall): Promise<ToolResult> {
-    const toolName = toolCall.function.name;
-    const tool = this.tools.get(toolName);
-
-    if (!tool) {
-      this.logger.error(`Tool not found: ${toolName}`);
-      return {
-        success: false,
-        error: `Tool not found: ${toolName}`,
-      };
-    }
-
-    try {
-      this.logger.info(`Executing tool: ${toolName}`);
-
-      const params = JSON.parse(toolCall.function.arguments);
-      const context: ToolExecutionContext = {
-        workingDirectory: this.workingDirectory,
-        environment: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]),
-      };
-
-      const result = await tool.execute(params, context);
-      this.logger.debug(`Tool ${toolName} executed successfully`, { success: result.success });
-
-      return result;
-    } catch (error) {
-      this.logger.error(`Tool execution failed: ${toolName}`, { error });
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
   }
 
