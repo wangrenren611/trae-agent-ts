@@ -12,16 +12,16 @@ async function basicExample() {
     // Create agent
     const agent = await Agent.create({
       config,
-      workingDirectory: '/Users/wrr/work/forex-kybc/src/components/custom-upload',
+      workingDirectory: './workspace'
     });
 
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "分析代码是否存在逻辑问题，代码是否可优化，是否有bug，帮我优化代码";
+    const task = "帮我写一篇8000字的论文，ai agent  ReAct 模型";
     console.log(`📋 Executing task: ${task}`);
 
-    const trajectory = await agent.execute(task,30);
+    const trajectory = await agent.execute(task,200)
 
     console.log('\n📊 Results:');
     console.log(`✅ Success: ${trajectory.success}`);

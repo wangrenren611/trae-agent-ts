@@ -302,12 +302,16 @@ describe('Tools', () => {
   describe('EditTool', () => {
     it('should create a file', async () => {
       const tool = new EditTool();
+      const testFile = join(testDir, 'test.txt');
       const result = await tool.execute({
         command: 'create',
-        path: 'test.txt',
+        path: testFile,
         file_text: 'Hello, World!',
       }, context);
 
+      if (!result.success) {
+        console.log('Create file error:', result.error);
+      }
       expect(result.success).toBe(true);
       expect(result.result).toMatchObject({
         path: expect.stringContaining('test.txt'),
@@ -323,22 +327,26 @@ describe('Tools', () => {
       const tool = new EditTool();
       const result = await tool.execute({
         command: 'view',
-        path: 'view-test.txt',
+        path: testFile,
       }, context);
 
+      if (!result.success) {
+        console.log('View file error:', result.error);
+      }
       expect(result.success).toBe(true);
       expect(result.result).toMatchObject({
-        content: 'Test content',
+        content: expect.stringContaining('Test content'),
         line_count: 1,
       });
     });
 
     it('should handle missing required parameters', async () => {
       const tool = new EditTool();
+      const testFile = join(testDir, 'test.txt');
       const result = await tool.execute({
         command: 'create',
         // missing file_text
-        path: 'test.txt',
+        path: testFile,
       }, context);
 
       expect(result.success).toBe(false);

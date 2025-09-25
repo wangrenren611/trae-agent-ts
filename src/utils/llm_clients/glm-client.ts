@@ -55,7 +55,7 @@ export class GLMClient extends LLMClient {
 
    
    
-      fs.writeFileSync('request.json', JSON.stringify(request, null, 2));
+      fs.writeFileSync('request.json', JSON.stringify(request, null, 2),'utf-8');
       const response = await this.client.chat.completions.create(request);
       const choice = response.choices[0];
 
