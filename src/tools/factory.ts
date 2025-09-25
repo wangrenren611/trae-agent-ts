@@ -19,8 +19,11 @@ export async function createTools(config: Config, logger: Logger): Promise<ToolE
     'edit_tool': () => new EditTool(),
     'bash_tool': () => new BashTool(),
     'json_edit_tool': () => new JSONEditTool(),
+    'sequential_thinking_tool': () => new SequentialThinkingTool(),
     'sequentialthinking': () => new SequentialThinkingTool(),
+    'task_done_tool': () => new TaskDoneTool(),
     'task_done': () => new TaskDoneTool(),
+    'ckg_tool': () => new CKGTool(logger),
     'ckg': () => new CKGTool(logger),
   };
 

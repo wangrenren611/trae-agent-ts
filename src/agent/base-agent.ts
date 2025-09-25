@@ -158,7 +158,7 @@ export abstract class BaseAgent {
       // Get LLM response
       const llmMessages = this.convertToLLMMessages(messages);
 
-      this.logger.info('llmMessages', llmMessages);
+      // this.logger.info('llmMessages', llmMessages);
 
       const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
 

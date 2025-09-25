@@ -7,17 +7,18 @@ async function basicExample() {
     // Load configuration
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
-  console.log('🔧 Configuration loaded successfully',config);
+    console.log('🔧 Configuration loaded successfully', config);
+    
     // Create agent
     const agent = await Agent.create({
       config,
-      workingDirectory: './workspace',
+      workingDirectory: '/Users/wrr/work/forex-kybc/src/components/custom-upload',
     });
 
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "优化代码D:\\trae-agent-ts\\workspace\\classify-route.ts";
+    const task = "分析代码是否存在逻辑问题，代码是否可优化，是否有bug，帮我优化代码";
     console.log(`📋 Executing task: ${task}`);
 
     const trajectory = await agent.execute(task,30);

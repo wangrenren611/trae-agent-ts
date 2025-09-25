@@ -6,19 +6,21 @@ export abstract class LLMClient {
   protected readonly maxTokens?: number;
   protected readonly temperature?: number;
   protected readonly topP?: number;
-
+   protected readonly thinking?: boolean;
   constructor(
     provider: string,
     model: string,
     maxTokens?: number,
     temperature?: number,
-    topP?: number
+    topP?: number,
+    thinking?: boolean
   ) {
     this.provider = provider;
     this.model = model;
     this.maxTokens = maxTokens;
     this.temperature = temperature;
     this.topP = topP;
+    this.thinking = thinking;
   }
 
   abstract chat(

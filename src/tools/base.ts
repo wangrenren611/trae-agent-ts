@@ -120,7 +120,12 @@ export class ToolCallExecutor {
 
   private normalizeName(name: string): string {
     // Normalize tool name by making it lowercase and removing underscores
-    return name.toLowerCase().replace(/_/g, '');
+    try {
+      return name.toLowerCase().replace(/_/g, '');
+    } catch (error) {
+      console.error(`Error normalizing tool name: ${error}`);
+      return name;
+    }
   }
 
   async executeToolCall(toolCall: ToolCall, context: ToolExecutionContext): Promise<ToolResult> {
