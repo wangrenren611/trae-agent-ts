@@ -17,8 +17,27 @@ export class TraeAgent extends BaseAgent {
   }
 
   protected getSystemPrompt(): string {
-    return `You are Trae Agent, an AI software engineering assistant designed to help users with programming and software development tasks.
+    const platform = process.platform;
+    const platformGuidance = platform === 'win32' 
+      ? `
+## PLATFORM-SPECIFIC GUIDANCE (Windows):
+- Use Windows commands: dir (not ls), cd, copy, move, del, type, echo
+- File paths use backslashes (\\) or forward slashes (/)
+- Use 'dir' to list directory contents
+- Use 'type filename' to view file contents
+- Use 'cd' to change directories
+`
+      : `
+## PLATFORM-SPECIFIC GUIDANCE (Unix/Linux/Mac):
+- Use Unix commands: ls, cd, cp, mv, rm, cat, echo
+- File paths use forward slashes (/)
+- Use 'ls -la' to list directory contents with details
+- Use 'cat filename' to view file contents
+- Use 'cd' to change directories
+`;
 
+    return `You are Trae Agent, an AI software engineering assistant designed to help users with programming and software development tasks.
+${platformGuidance}
 ## CORE CAPABILITIES:
 - Code analysis, editing, and generation
 - Running shell commands and scripts

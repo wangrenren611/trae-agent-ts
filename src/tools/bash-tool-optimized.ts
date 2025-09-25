@@ -853,15 +853,15 @@ class SecurityManager {
 /**
  * Production-ready BashTool with zero hardcoded assumptions
  */
-export class BashTool extends ToolExecutor {
+export class BashToolOptimized extends ToolExecutor {
   private session: BashSession | null = null;
   private config: BashConfig;
   private security: SecurityManager;
   private monitor: BashToolMonitor;
 
   constructor(config: Partial<BashConfig> = {}) {
-    super('bash_tool', {
-      name: 'bash_tool',
+    super('bash_tool_optimized', {
+      name: 'bash_tool_optimized',
       description: `Production-ready shell execution tool with enhanced cross-platform support
 * Intelligent platform detection without hardcoded assumptions
 * Configurable prompt patterns and output processing
@@ -1209,4 +1209,6 @@ export class BashTool extends ToolExecutor {
   }
 }
 
-// Note: Tool registration is handled by the factory, not here
+// Register the optimized tool
+import { globalToolRegistry } from './base.js';
+globalToolRegistry.register(new BashToolOptimized());

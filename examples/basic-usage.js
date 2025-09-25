@@ -2,37 +2,61 @@ const { Agent, ConfigManager } = require('../dist/index.js');
 
 async function basicExample() {
   console.log('🚀 Starting Trae Agent TypeScript Example');
+  console.log(`📱 Platform: ${process.platform}`);
 
   try {
     // Load configuration
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
-    console.log('🔧 Configuration loaded successfully', config);
+    console.log('🔧 Configuration loaded successfully');
     
     // Create agent
     const agent = await Agent.create({
       config,
-      workingDirectory: './workspace'
+      workingDirectory: process.cwd() // 使用当前工作目录而不是./src
     });
 
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "帮我写一篇8000字的论文，ai agent  ReAct 模型";
+    const task = "写一首诗仙，最牛逼的诗，输出文件之中，在workspace目录下输出";
     console.log(`📋 Executing task: ${task}`);
 
-    const trajectory = await agent.execute(task,200)
+    const trajectory = await agent.execute(task, 30); // 减少超时时间到30秒
 
     console.log('\n📊 Results:');
     console.log(`✅ Success: ${trajectory.success}`);
     console.log(`📈 Steps taken: ${trajectory.steps.length}`);
-    console.log(`⏱️ Duration: ${trajectory.end_time ? new Date(trajectory.end_time).getTime() - new Date(trajectory.start_time).getTime() : 'N/A'}ms`);
+    
+    if (trajectory.start_time && trajectory.end_time) {
+      const duration = new Date(trajectory.end_time).getTime() - new Date(trajectory.start_time).getTime();
+      console.log(`⏱️ Duration: ${duration}ms`);
+    }
 
     if (trajectory.success) {
       console.log('\n🎉 Task completed successfully!');
-      console.log('Check your workspace directory for the created files.');
+      // 显示最后一个步骤的工具结果
+      const lastStep = trajectory.steps[trajectory.steps.length - 1];
+      if (lastStep && lastStep.tool_results && lastStep.tool_results.length > 0) {
+        console.log('📄 Final result:', lastStep.tool_results[lastStep.tool_results.length - 1]);
+      }
     } else {
       console.log('\n❌ Task failed. Check the trajectory for details.');
+      // 显示错误信息
+      const failedSteps = trajectory.steps.filter(step => 
+        step.tool_results && step.tool_results.some(result => !result.success)
+      );
+      if (failedSteps.length > 0) {
+        console.log('🔍 Failed step details:');
+        failedSteps.forEach((step, index) => {
+          console.log(`  Step ${index + 1}: ${step.step_id}`);
+          step.tool_results?.forEach(result => {
+            if (!result.success) {
+              console.log(`    Error: ${result.error || 'Unknown error'}`);
+            }
+          });
+        });
+      }
     }
 
   } catch (error) {
