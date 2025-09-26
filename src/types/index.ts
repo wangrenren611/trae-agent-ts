@@ -65,7 +65,7 @@ export interface AgentStep {
   tool_calls: ToolCall[];
   tool_results: ToolResult[];
   completed: boolean;
-  timestamp: string;
+  timestamp: number;
 }
 
 export interface AgentTrajectory {

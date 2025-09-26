@@ -81,7 +81,7 @@ export abstract class BaseAgent {
        
         const step = await this.executeStep(messages, stepCount);
         this.trajectory.steps.push(step);
-        
+    
         // Check if task should be completed (but hasn't called task_done yet)
         const shouldComplete = this.shouldAutoCompleteTask(step);
         
@@ -169,7 +169,7 @@ export abstract class BaseAgent {
       tool_calls: [],
       tool_results: [],
       completed: false,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().getTime(),
     };
 
     try {
@@ -330,7 +330,7 @@ export abstract class BaseAgent {
       }],
       tool_results: [],
       completed: false,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().getTime(),
     };
 
     try {

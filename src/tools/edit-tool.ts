@@ -354,7 +354,9 @@ export class EditTool extends ToolExecutor {
       // Create directory if it doesn't exist
       const dir = dirname(path);
       await mkdir(dir, { recursive: true });
-
+      console.log(`Creating directory: ${dir}`);
+      console.log(`Creating file: ${path}`);
+      
       await writeFile(path, content, this.config.defaultEncoding);
 
       return this.createSuccessResult({

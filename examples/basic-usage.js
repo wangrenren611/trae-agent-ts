@@ -19,11 +19,10 @@ async function basicExample() {
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "写一首诗仙，最牛逼的诗，输出文件之中，在workspace目录下输出";
+    const task = "诗仙最牛逼的诗是什么，请帮我输出文件之中，在workspace目录下输出";
     console.log(`📋 Executing task: ${task}`);
 
-    const trajectory = await agent.execute(task, 30); // 减少超时时间到30秒
-
+    const trajectory = await agent.execute(task, 30); 
     console.log('\n📊 Results:');
     console.log(`✅ Success: ${trajectory.success}`);
     console.log(`📈 Steps taken: ${trajectory.steps.length}`);
