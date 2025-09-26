@@ -10,6 +10,7 @@ import { JSONEditTool } from './json-edit-tool.js';
 import { SequentialThinkingTool } from './sequential-thinking-tool.js';
 import { TaskDoneTool } from './task-done-tool.js';
 import { CKGTool } from './ckg-tool.js';
+import { CompleteTaskTool } from './complete-task-tool.js';
 
 export async function createTools(config: Config, logger: Logger): Promise<ToolExecutor[]> {
   const tools: ToolExecutor[] = [];
@@ -23,6 +24,8 @@ export async function createTools(config: Config, logger: Logger): Promise<ToolE
     'sequentialthinking': () => new SequentialThinkingTool(),
     'task_done_tool': () => new TaskDoneTool(),
     'task_done': () => new TaskDoneTool(),
+    'complete_task_tool': () => new CompleteTaskTool(logger),
+    'complete_task': () => new CompleteTaskTool(logger),
     'ckg_tool': () => new CKGTool(logger),
     'ckg': () => new CKGTool(logger),
   };

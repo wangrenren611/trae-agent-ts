@@ -98,7 +98,8 @@ export class EditTool extends ToolExecutor {
       const validatedPath = await this._validateAndResolvePath(
         path as string, 
         context.workingDirectory, 
-        command as string
+        command as string,
+        params
       );
 
       switch (command) {
@@ -142,7 +143,8 @@ export class EditTool extends ToolExecutor {
   private async _validateAndResolvePath(
     path: string, 
     workingDirectory: string, 
-    command: string
+    command: string,
+    params?: Record<string, unknown>
   ): Promise<string> {
     if (!isAbsolute(path)) {
       throw new Error(`Path must be absolute: ${path}. Consider using: ${resolve(workingDirectory, path)}`);
@@ -166,7 +168,11 @@ export class EditTool extends ToolExecutor {
     if (command === 'create') {
       try {
         await stat(fullPath);
-        throw new Error(`File already exists at: ${fullPath}. Cannot overwrite files using create command.`);
+        // File exists - check if overwrite is allowed through params
+        const overwrite = params?.overwrite;
+        if (!overwrite) {
+          throw new Error(`File already exists at: ${fullPath}. Use "overwrite": true to replace it, or delete the file first.`);
+        }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
           throw error;

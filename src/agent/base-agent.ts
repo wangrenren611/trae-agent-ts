@@ -24,11 +24,7 @@ export abstract class BaseAgent {
   protected readonly logger: Logger;
   protected trajectory: AgentTrajectory;
   protected workingDirectory: string;
-  protected currentStep: AgentStep | null = null;
   protected isRunning = false;
-  // Track recent assistant messages to detect loops
-  protected recentAssistantMessages: string[] = [];
-  protected maxRecentMessages = 5;
 
   constructor(
     agentId: string,
@@ -57,7 +53,7 @@ export abstract class BaseAgent {
   }
 
   async execute(task: string, maxSteps: number = 30): Promise<AgentTrajectory> {
-    this.logger.info(`Starting agent execution for task: ${task}`);
+    this.logger.info(`Starting ReAct agent execution for task: ${task}`);
     this.trajectory.task = task;
     this.isRunning = true;
 
@@ -75,72 +71,60 @@ export abstract class BaseAgent {
 
       let stepCount = 0;
 
+      // ReAct循环：Reasoning -> Acting -> Observation
       while (this.isRunning && stepCount < maxSteps) {
         stepCount++;
-        this.logger.debug(`Executing step ${stepCount}/${maxSteps}`);
-       
-        const step = await this.executeStep(messages, stepCount);
-        this.trajectory.steps.push(step);
-    
-        // Check if task should be completed (but hasn't called task_done yet)
-        const shouldComplete = this.shouldAutoCompleteTask(step);
+        this.logger.debug(`执行ReAct循环第 ${stepCount}/${maxSteps} 轮`);
+
+        // 1. Reasoning阶段 - 让Agent思考和规划
+        const reasoningResponse = await this.reasoning(messages, stepCount);
         
-        if (step.completed) {
-          this.logger.info(`Task completed successfully after ${stepCount} steps`);
-          this.trajectory.completed = true;
-          this.trajectory.success = true;
-          this.trajectory.end_time = new Date().toISOString();
-        } else if (shouldComplete && !this.hasTaskDoneCall(step)) {
-          // Auto-call task_done if task should be completed but hasn't called it yet
-          this.logger.info(`Auto-calling task_done after ${stepCount} steps`);
-          const taskDoneStep = await this.executeTaskDoneCall(messages, stepCount + 1, step);
-          this.trajectory.steps.push(taskDoneStep);
+        // 检查是否有工具调用
+        if (reasoningResponse.tool_calls && reasoningResponse.tool_calls.length > 0) {
+          // 2. Acting阶段 - 执行工具调用
+          const observations = await this.acting(reasoningResponse.tool_calls, stepCount);
           
-          if (taskDoneStep.completed) {
+          // 3. Observation阶段 - 处理观察结果
+          const stepCompleted = await this.observation(observations, messages, reasoningResponse);
+          
+          if (stepCompleted) {
+            this.logger.info(`任务在第 ${stepCount} 步完成`);
             this.trajectory.completed = true;
             this.trajectory.success = true;
             this.trajectory.end_time = new Date().toISOString();
+            break;
           }
-        }
-        
-        // Write trajectory to file for debugging (after status update)
-        writeFileSync('./trajectory.json', JSON.stringify(this.trajectory, null, 2));
-
-        if (step.completed || (shouldComplete && this.trajectory.completed)) {
-          break;
-        }
-
-        // Always add assistant message if LLM provided content
-        const llmResponseContent = (step as any).llm_response_content || '';
-        if (llmResponseContent.trim() || step.tool_calls.length > 0) {
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: llmResponseContent,
-            tool_calls: step.tool_calls.length > 0 ? step.tool_calls : undefined,
+        } else {
+          // 没有工具调用，可能是纯文本回复，结束循环
+          this.logger.info(`Agent提供了最终回复，在第 ${stepCount} 步结束`);
+          
+          // 创建最终步骤
+          const finalStep: AgentStep = {
+            step_id: randomUUID(),
+            task: this.trajectory.task,
+            messages: [...messages],
+            tool_calls: [],
+            tool_results: [],
+            completed: true,
+            timestamp: new Date().getTime(),
           };
           
-          messages.push(assistantMessage);
-          this.addRecentMessage(assistantMessage.content);
-        }
-
-        // Add tool results to messages
-        for (const result of step.tool_results) {
-          const toolCallId = step.tool_calls.find(call =>
-            call.function.name === this.getToolNameFromResult(result)
-          )?.id;
+          // 存储LLM响应内容
+          (finalStep as any).llm_response_content = reasoningResponse.content || '';
           
-          if (toolCallId) {
-            messages.push({
-              role: 'tool',
-              content: JSON.stringify(result),
-              tool_call_id: toolCallId,
-            });
-          }
+          this.trajectory.steps.push(finalStep);
+          this.trajectory.completed = true;
+          this.trajectory.success = true;
+          this.trajectory.end_time = new Date().toISOString();
+          break;
         }
+        
+        // 写入轨迹用于调试
+        writeFileSync('./trajectory.json', JSON.stringify(this.trajectory, null, 2));
       }
 
       if (!this.trajectory.completed) {
-        this.logger.warn(`Task not completed after ${maxSteps} steps`);
+        this.logger.warn(`任务在 ${maxSteps} 步后未完成`);
         this.trajectory.completed = true;
         this.trajectory.success = false;
         this.trajectory.end_time = new Date().toISOString();
@@ -148,104 +132,297 @@ export abstract class BaseAgent {
 
       return this.trajectory;
     } catch (error) {
-      this.logger.error(`Agent execution failed: ${error}`);
+      this.logger.error(`Agent执行失败: ${error}`);
       this.trajectory.completed = true;
       this.trajectory.success = false;
       this.trajectory.end_time = new Date().toISOString();
       throw error;
     } finally {
       this.isRunning = false;
-      // Clean up tool resources
+      // 清理工具资源
       await this.toolCallExecutor.closeTools();
-      this.logger.info(`Agent execution completed. Success: ${this.trajectory.success}`);
+      this.logger.info(`Agent执行完成。成功: ${this.trajectory.success}`);
     }
   }
 
-  protected async executeStep(messages: Message[], stepNumber: number): Promise<AgentStep> {
-    this.currentStep = {
+  /**
+   * ReAct循环的推理阶段
+   * 让LLM分析当前情况并决定下一步行动
+   */
+  protected async reasoning(messages: Message[], stepNumber: number): Promise<LLMResponse> {
+    this.logger.debug(`开始推理阶段 - 步骤 ${stepNumber}`);
+    
+    // 转换消息格式
+    const llmMessages = this.convertToLLMMessages(messages);
+    
+    // 获取可用工具
+    const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
+    
+    // 增强的错误信息解析和智能提示
+    const lastMessage = llmMessages[llmMessages.length - 1];
+    if (lastMessage?.role === 'tool' && lastMessage.content) {
+      try {
+        const toolResult = JSON.parse(lastMessage.content);
+        if (!toolResult.success && toolResult.error) {
+          // 解析路径建议
+          const pathMatch = toolResult.error.match(/Consider using: ([^\s]+)/);
+          if (pathMatch) {
+            const suggestedPath = pathMatch[1];
+            const pathHint = {
+              role: 'system' as const,
+              content: `💡 智能提示：系统建议使用路径 "${suggestedPath}"，请直接使用此路径，避免手动浏览文件系统。`
+            };
+            llmMessages.push(pathHint);
+          }
+          
+          // 文件已存在处理
+          if (toolResult.error.includes('File already exists')) {
+            const overwriteHint = {
+              role: 'system' as const,
+              content: `💡 文件存在处理：可以使用edit_tool的"overwrite"选项或先删除文件再创建。`
+            };
+            llmMessages.push(overwriteHint);
+          }
+          
+          // bash_tool超时提示
+          if (toolResult.error.includes('Session setup timeout')) {
+            const bashHint = {
+              role: 'system' as const,
+              content: `💡 bash_tool超时：建议立即切换到edit_tool进行文件操作，以提高执行效率。`
+            };
+            llmMessages.push(bashHint);
+          }
+        }
+      } catch (e) {
+        // 忽略JSON解析错误
+      }
+    }
+    
+    // 添加上下文感知提示
+    if (stepNumber === 1 && this.workingDirectory) {
+      // 为第一步添加工作目录上下文
+      const contextMessage = {
+        role: 'system' as const,
+        content: `上下文信息：当前工作目录为 ${this.workingDirectory}。当需要绝对路径时，请直接使用此目录作为基础路径。`
+      };
+      llmMessages.push(contextMessage);
+    }
+    
+    // 增强的重复操作检测
+    if (this.trajectory.steps.length > 0) {
+      const recentSteps = this.trajectory.steps.slice(-4);
+      const toolCallHistory = recentSteps.flatMap(step => 
+        step.tool_calls.map(tc => tc.function.name)
+      ).filter(Boolean);
+      
+      // 检测连续相同工具调用
+      if (toolCallHistory.length >= 3) {
+        const lastThree = toolCallHistory.slice(-3);
+        const uniqueTools = new Set(lastThree);
+        
+        if (uniqueTools.size === 1) {
+          const repeatedTool = Array.from(uniqueTools)[0];
+          this.logger.warn(`检测到重复调用工具: ${repeatedTool}`);
+          
+          const warningMessage = {
+            role: 'system' as const,
+            content: `🚨 效率警告：连续调用${repeatedTool}工具${lastThree.length}次。建议：
+1. 重新评估策略，考虑使用其他工具
+2. 如果bash_tool失败，立即切换到edit_tool
+3. 利用错误信息中的路径建议
+4. 检查是否可以直接完成任务并调用complete_task`
+          };
+          llmMessages.push(warningMessage);
+        }
+      }
+      
+      // 检测工具失败模式
+      const recentFailures = recentSteps.filter(step => 
+        step.tool_results.some(result => !result.success)
+      );
+      
+      if (recentFailures.length >= 2) {
+        const strategyHint = {
+          role: 'system' as const,
+          content: `💡 策略优化：检测到多次工具失败。建议优先使用edit_tool进行文件操作，它比bash_tool更稳定可靠。`
+        };
+        llmMessages.push(strategyHint);
+      }
+    }
+    
+    // 添加步骤优化提示
+    if (stepNumber > 6) {
+      const optimizationHint = {
+        role: 'system' as const,
+        content: `⚡ 步骤优化提示：已经执行了${stepNumber}个步骤。请检查是否在重复相同的操作。如果是，请重新评估策略并选择不同的方法。考虑是否可以直接调用complete_task完成任务。`
+      };
+      llmMessages.push(optimizationHint);
+    }
+    
+    // 调用LLM进行推理
+    const response = await this.llmClient.chat(
+      llmMessages,
+      availableTools.length > 0 ? availableTools : undefined
+    );
+    
+    this.logger.debug(`推理阶段完成`, {
+      hasContent: !!response.content,
+      hasToolCalls: !!(response.tool_calls && response.tool_calls.length > 0),
+      toolCallCount: response.tool_calls?.length || 0
+    });
+    
+    return response;
+  }
+
+  /**
+   * ReAct循环的行动阶段
+   * 执行推理阶段决定的工具调用
+   */
+  protected async acting(toolCalls: ToolCall[], stepNumber: number): Promise<ToolResult[]> {
+    this.logger.debug(`开始行动阶段 - 步骤 ${stepNumber}`, {
+      toolCallCount: toolCalls.length
+    });
+    
+    // 创建执行上下文
+    const context: ToolExecutionContext = {
+      workingDirectory: this.workingDirectory,
+      environment: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]),
+    };
+    
+    // 并行执行所有工具调用
+    const toolResults = await this.toolCallExecutor.parallelToolCall(toolCalls, context);
+    
+    this.logger.debug(`行动阶段完成`, {
+      successCount: toolResults.filter(r => r.success).length,
+      errorCount: toolResults.filter(r => !r.success).length
+    });
+    
+    return toolResults;
+  }
+
+  /**
+   * ReAct循环的观察阶段
+   * 处理工具执行结果，更新消息历史，判断是否完成任务
+   */
+  protected async observation(
+    toolResults: ToolResult[], 
+    messages: Message[], 
+    reasoningResponse: LLMResponse
+  ): Promise<boolean> {
+    this.logger.debug('开始观察阶段');
+    
+    // 检查是否有complete_task工具被成功调用
+    const hasCompleteTask = toolResults.some(result => {
+      // 查找对应的工具调用
+      const toolCallIndex = toolResults.indexOf(result);
+      const toolCall = reasoningResponse.tool_calls?.[toolCallIndex];
+      
+      return result.success && 
+             toolCall?.function.name === 'complete_task' &&
+             result.result &&
+             typeof result.result === 'object' &&
+             'task_completed' in result.result && 
+             result.result.task_completed === true;
+    });
+    
+    if (hasCompleteTask) {
+      this.logger.info('检测到complete_task工具调用，任务完成');
+      
+      // 创建最终步骤记录
+      const finalStep: AgentStep = {
+        step_id: randomUUID(),
+        task: this.trajectory.task,
+        messages: [...messages],
+        tool_calls: reasoningResponse.tool_calls || [],
+        tool_results: toolResults,
+        completed: true,
+        timestamp: new Date().getTime(),
+      };
+      
+      // 存储推理响应内容
+      (finalStep as any).llm_response_content = reasoningResponse.content || '';
+      
+      this.trajectory.steps.push(finalStep);
+      return true;
+    }
+    
+    // 检查是否有重复的工具调用模式
+    const recentSteps = this.trajectory.steps.slice(-3); // 检查最近3个步骤
+    const currentToolNames = reasoningResponse.tool_calls?.map(tc => tc.function.name) || [];
+    
+    let repetitionDetected = false;
+    if (recentSteps.length >= 2) {
+      const recentToolPatterns = recentSteps.map(step => 
+        step.tool_calls.map(tc => tc.function.name).join(',')
+      );
+      const currentPattern = currentToolNames.join(',');
+      
+      if (recentToolPatterns.includes(currentPattern)) {
+        repetitionDetected = true;
+        this.logger.warn('检测到重复的工具调用模式', {
+          currentPattern,
+          recentPatterns: recentToolPatterns
+        });
+      }
+    }
+    
+    // 创建当前步骤记录
+    const currentStep: AgentStep = {
       step_id: randomUUID(),
       task: this.trajectory.task,
       messages: [...messages],
-      tool_calls: [],
-      tool_results: [],
+      tool_calls: reasoningResponse.tool_calls || [],
+      tool_results: toolResults,
       completed: false,
       timestamp: new Date().getTime(),
     };
-
-    try {
-      // Get LLM response
-      const llmMessages = this.convertToLLMMessages(messages);
-
-      // this.logger.info('llmMessages', llmMessages);
-
-      const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
-
-      this.logger.debug('Calling LLM with messages and tools', {
-        messageCount: messages.length,
-        toolCount: availableTools.length,
-      });
-
-      const response = await this.llmClient.chat(
-        llmMessages,
-        availableTools.length > 0 ? availableTools : undefined
-      );
-     
-      // Process tool calls
-      if (response.tool_calls && response.tool_calls.length > 0) {
-        this.currentStep.tool_calls = response.tool_calls;
-
-        // Create execution context
-        const context: ToolExecutionContext = {
-          workingDirectory: this.workingDirectory,
-          environment: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]),
-        };
-
-        // Execute tool calls in parallel using the new ToolCallExecutor
-        const toolResults = await this.toolCallExecutor.parallelToolCall(response.tool_calls, context);
-        this.currentStep.tool_results = toolResults;
-        
-        // After executing tools, get LLM response to process the results
-        const toolMessages = [...llmMessages];
-        
-        // Add the assistant message with tool calls
-        toolMessages.push({
-          role: 'assistant',
-          content: response.content || '',
-          tool_calls: response.tool_calls,
-        });
-        
-        // Add tool results
-        for (let i = 0; i < toolResults.length; i++) {
-          toolMessages.push({
-            role: 'tool',
-            content: JSON.stringify(toolResults[i]),
-            tool_call_id: response.tool_calls[i].id,
-          });
-        }
-        
-        // Get LLM response to analyze tool results
-        const followUpResponse = await this.llmClient.chat(toolMessages);
-        
-        // Store the follow-up response content
-        (this.currentStep as any).llm_response_content = followUpResponse.content || '';
-        
-        // Check if task is completed based on follow-up response
-        this.currentStep.completed = this.isTaskCompleted(followUpResponse, this.currentStep.tool_results);
-      } else {
-        // No tool calls, just store the response content
-        (this.currentStep as any).llm_response_content = response.content || '';
-        
-        // Check if task is completed
-        this.currentStep.completed = this.isTaskCompleted(response, this.currentStep.tool_results);
-      }
-
-      return this.currentStep;
-    } catch (error) {
-      this.logger.error(`Step execution failed: ${error}`);
-      this.currentStep.completed = true;
-      throw error;
+    
+    // 存储推理响应内容和重复检测信息
+    (currentStep as any).llm_response_content = reasoningResponse.content || '';
+    (currentStep as any).repetition_detected = repetitionDetected;
+    
+    this.trajectory.steps.push(currentStep);
+    
+    // 将助手消息添加到对话历史
+    if (reasoningResponse.content || (reasoningResponse.tool_calls && reasoningResponse.tool_calls.length > 0)) {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: reasoningResponse.content || '',
+        tool_calls: reasoningResponse.tool_calls && reasoningResponse.tool_calls.length > 0 ? reasoningResponse.tool_calls : undefined,
+      };
+      
+      messages.push(assistantMessage);
     }
+    
+    // 将工具结果添加到对话历史
+    for (let i = 0; i < toolResults.length; i++) {
+      const result = toolResults[i];
+      const toolCall = reasoningResponse.tool_calls?.[i];
+      
+      if (toolCall) {
+        messages.push({
+          role: 'tool',
+          content: JSON.stringify(result),
+          tool_call_id: toolCall.id,
+        });
+      }
+    }
+    
+    // 如果检测到重复，添加优化提示
+    if (repetitionDetected) {
+      messages.push({
+        role: 'system',
+        content: '检测到重复的操作模式。请重新评估当前策略，尝试不同的方法或直接使用可用的信息来完成任务。'
+      });
+    }
+    
+    this.logger.debug('观察阶段完成，继续下一轮ReAct循环', {
+      repetitionDetected,
+      toolResultsCount: toolResults.length
+    });
+    return false;
   }
+  // 移除旧的executeStep方法和其他不需要的方法
 
   protected convertToLLMMessages(messages: Message[]): LLMMessage[] {
     return messages.map(msg => ({
@@ -257,107 +434,7 @@ export abstract class BaseAgent {
     }));
   }
 
-  protected getToolNameFromResult(result: ToolResult): string {
-    // Try to extract tool name from result metadata or use a more sophisticated mapping
-    if (result.result && typeof result.result === 'object' && 'tool_name' in result.result) {
-      return (result.result as any).tool_name;
-    }
-    
-    // For now, we'll use a simple approach - match by index
-    // This assumes tool results are in the same order as tool calls
-    const resultIndex = this.currentStep?.tool_results.indexOf(result) ?? -1;
-    if (resultIndex >= 0 && this.currentStep?.tool_calls[resultIndex]) {
-      return this.currentStep.tool_calls[resultIndex].function.name;
-    }
-    
-    return 'unknown';
-  }
 
-  protected isTaskCompleted(response: LLMResponse, toolResults: ToolResult[]): boolean {
-    // Check if any tool result indicates task completion via task_done tool
-    const hasTaskDone = toolResults.some(result =>
-      result.success && result.result &&
-      typeof result.result === 'object' &&
-      'task_completed' in result.result && 
-      result.result.task_completed === true
-    );
-
-    if (hasTaskDone) {
-      return true;
-    }
-
-    // Don't auto-complete here, let the main loop handle auto task_done calls
-    return false;
-  }
-
-  // Add recent message to track for loops
-  private addRecentMessage(content: string): void {
-    this.recentAssistantMessages.push(content);
-    if (this.recentAssistantMessages.length > this.maxRecentMessages) {
-      this.recentAssistantMessages.shift();
-    }
-  }
-
-  // Check if task should be auto-completed
-  private shouldAutoCompleteTask(step: AgentStep): boolean {
-    // Only auto-complete if step has substantial response and no tool calls
-    const llmResponse = (step as any).llm_response_content || '';
-    return llmResponse.trim().length > 10 && step.tool_calls.length === 0;
-  }
-
-  // Check if step already contains task_done call
-  private hasTaskDoneCall(step: AgentStep): boolean {
-    return step.tool_calls.some(call => call.function.name === 'task_done');
-  }
-
-  // Execute task_done call automatically
-  private async executeTaskDoneCall(messages: Message[], stepNumber: number, previousStep: AgentStep): Promise<AgentStep> {
-    const taskDoneStep: AgentStep = {
-      step_id: randomUUID(),
-      task: this.trajectory.task,
-      messages: [...messages],
-      tool_calls: [{
-        id: randomUUID(),
-        type: 'function',
-        function: {
-          name: 'task_done',
-          arguments: JSON.stringify({
-            task_completed: true,
-            result: (previousStep as any).llm_response_content || 'Task completed successfully',
-            summary: `Completed task: ${this.trajectory.task}`
-          })
-        }
-      }],
-      tool_results: [],
-      completed: false,
-      timestamp: new Date().getTime(),
-    };
-
-    try {
-      // Execute the task_done tool
-      const context: ToolExecutionContext = {
-        workingDirectory: this.workingDirectory,
-        environment: Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]),
-      };
-
-      const toolResults = await this.toolCallExecutor.parallelToolCall(taskDoneStep.tool_calls, context);
-      taskDoneStep.tool_results = toolResults;
-      
-      // Check if task_done was successful
-      taskDoneStep.completed = toolResults.some(result =>
-        result.success && result.result &&
-        typeof result.result === 'object' &&
-        'task_completed' in result.result && 
-        result.result.task_completed === true
-      );
-
-      return taskDoneStep;
-    } catch (error) {
-      this.logger.error(`Failed to execute task_done: ${error}`);
-      taskDoneStep.completed = false;
-      return taskDoneStep;
-    }
-  }
 
   protected abstract getSystemPrompt(): string;
 
@@ -371,7 +448,8 @@ export abstract class BaseAgent {
   }
 
   public getCurrentStep(): AgentStep | null {
-    return this.currentStep;
+    // 返回最后一个步骤，如果没有则返回null
+    return this.trajectory.steps.length > 0 ? this.trajectory.steps[this.trajectory.steps.length - 1] : null;
   }
 
   public isAgentRunning(): boolean {

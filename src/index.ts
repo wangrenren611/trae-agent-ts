@@ -10,6 +10,7 @@ export { BashTool } from './tools/bash-tool.js';
 export { JSONEditTool } from './tools/json-edit-tool.js';
 export { SequentialThinkingTool } from './tools/sequential-thinking-tool.js';
 export { TaskDoneTool } from './tools/task-done-tool.js';
+export { CompleteTaskTool } from './tools/complete-task-tool.js';
 export { CKGTool } from './tools/ckg-tool.js';
 export { MCPTool } from './tools/mcp-tool.js';
 

@@ -168,7 +168,7 @@ class WindowsStrategy implements PlatformStrategy {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('Session setup timeout'));
-      }, 5000);
+      }, 15000); // 增加超时时间到15秒
 
       const onData = (data: Buffer) => {
         const output = data.toString();
@@ -180,8 +180,8 @@ class WindowsStrategy implements PlatformStrategy {
       };
 
       process.stdout?.on('data', onData);
-      // Send a simple command to trigger prompt display
-      process.stdin?.write('echo.\n');
+      // 简化初始化过程，只发送一个简单命令
+      process.stdin?.write('echo ready\n');
     });
   }
 
@@ -278,7 +278,7 @@ class UnixStrategy implements PlatformStrategy {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('Session setup timeout'));
-      }, 5000);
+      }, 15000); // 增加超时时间到15秒
 
       const onData = (data: Buffer) => {
         const output = data.toString();
@@ -290,9 +290,7 @@ class UnixStrategy implements PlatformStrategy {
       };
 
       process.stdout?.on('data', onData);
-      // Configure bash environment
-      process.stdin?.write('stty -onlcr\n');
-      process.stdin?.write('unset PROMPT_COMMAND\n');
+      // 简化bash环境设置，减少依赖命令
       process.stdin?.write('PS1="$ "\n');
     });
   }
