@@ -8,18 +8,18 @@ async function basicExample() {
     // Load configuration
     const configManager = await ConfigManager.getInstance();
     const config = configManager.getConfig();
-    console.log('🔧 Configuration loaded successfully');
+    
+    console.log('🔧 Configuration loaded successfully',config);
     
     // Create agent
     const agent = await Agent.create({
       config,
-      workingDirectory: process.cwd() // 使用当前工作目录而不是./src
     });
 
     console.log('🤖 Agent created successfully');
 
     // Execute a simple task
-    const task = "诗仙最牛逼的诗是什么，请帮我输出文件之中，在workspace目录下输出";
+    const task = "将代码/Users/wrr/work/trea/manual-test.js,拷贝到/Users/wrr/work/trea/workspace，并改写成rust代码";
     console.log(`📋 Executing task: ${task}`);
 
     const trajectory = await agent.execute(task, 30); 

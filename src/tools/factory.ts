@@ -11,6 +11,7 @@ import { SequentialThinkingTool } from './sequential-thinking-tool.js';
 import { TaskDoneTool } from './task-done-tool.js';
 import { CKGTool } from './ckg-tool.js';
 import { CompleteTaskTool } from './complete-task-tool.js';
+import { PlannerTool } from './planner-tool.js';
 
 export async function createTools(config: Config, logger: Logger): Promise<ToolExecutor[]> {
   const tools: ToolExecutor[] = [];
@@ -28,6 +29,8 @@ export async function createTools(config: Config, logger: Logger): Promise<ToolE
     'complete_task': () => new CompleteTaskTool(logger),
     'ckg_tool': () => new CKGTool(logger),
     'ckg': () => new CKGTool(logger),
+    'planner_tool': () => new PlannerTool(),
+    'planner': () => new PlannerTool(),
   };
 
   // Load built-in tools

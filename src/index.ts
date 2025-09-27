@@ -2,9 +2,11 @@
 export { Agent } from './agent/agent.js';
 export { TraeAgent } from './agent/trae-agent.js';
 export { BaseAgent } from './agent/base-agent.js';
+export { PlannerAgent } from './agent/planner-agent.js';
 
 // Tools
 export { ToolExecutor, ToolRegistry, ToolCallExecutor, globalToolRegistry } from './tools/base.js';
+export { createTools } from './tools/factory.js';
 export { EditTool } from './tools/edit-tool.js';
 export { BashTool } from './tools/bash-tool.js';
 export { JSONEditTool } from './tools/json-edit-tool.js';
@@ -13,6 +15,7 @@ export { TaskDoneTool } from './tools/task-done-tool.js';
 export { CompleteTaskTool } from './tools/complete-task-tool.js';
 export { CKGTool } from './tools/ckg-tool.js';
 export { MCPTool } from './tools/mcp-tool.js';
+export { PlannerTool } from './tools/planner-tool.js';
 
 // LLM Clients
 export { LLMClient } from './utils/llm_clients/llm-client.js';
@@ -29,6 +32,10 @@ export { Logger } from './utils/logging/logger.js';
 
 // Trajectory
 export { TrajectoryRecorder, Lakeview } from './utils/trajectory/recorder.js';
+
+// Types
+export * from './types/index.js';
+export * from './types/planning.js';
 
 // Docker
 export { DockerManager } from './utils/docker/docker-manager.js';

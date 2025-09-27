@@ -100,3 +100,4 @@ trae_config.yaml
 # Test artifacts
 test-results/
 junit.xml
+workspace/** 

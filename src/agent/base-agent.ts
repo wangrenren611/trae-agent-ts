@@ -74,7 +74,7 @@ export abstract class BaseAgent {
       // ReAct循环：Reasoning -> Acting -> Observation
       while (this.isRunning && stepCount < maxSteps) {
         stepCount++;
-        this.logger.debug(`执行ReAct循环第 ${stepCount}/${maxSteps} 轮`);
+        this.logger.info(`执行ReAct循环第 ${stepCount}/${maxSteps} 轮`);
 
         // 1. Reasoning阶段 - 让Agent思考和规划
         const reasoningResponse = await this.reasoning(messages, stepCount);
@@ -83,10 +83,10 @@ export abstract class BaseAgent {
         if (reasoningResponse.tool_calls && reasoningResponse.tool_calls.length > 0) {
           // 2. Acting阶段 - 执行工具调用
           const observations = await this.acting(reasoningResponse.tool_calls, stepCount);
-          
+          this.logger.info(`执行工具调用完成`);
           // 3. Observation阶段 - 处理观察结果
           const stepCompleted = await this.observation(observations, messages, reasoningResponse);
-          
+          this.logger.info(`观察阶段完成`);
           if (stepCompleted) {
             this.logger.info(`任务在第 ${stepCount} 步完成`);
             this.trajectory.completed = true;
@@ -157,107 +157,9 @@ export abstract class BaseAgent {
     
     // 获取可用工具
     const availableTools = Array.from(this.tools.values()).map(tool => tool.definition);
-    
-    // 增强的错误信息解析和智能提示
-    const lastMessage = llmMessages[llmMessages.length - 1];
-    if (lastMessage?.role === 'tool' && lastMessage.content) {
-      try {
-        const toolResult = JSON.parse(lastMessage.content);
-        if (!toolResult.success && toolResult.error) {
-          // 解析路径建议
-          const pathMatch = toolResult.error.match(/Consider using: ([^\s]+)/);
-          if (pathMatch) {
-            const suggestedPath = pathMatch[1];
-            const pathHint = {
-              role: 'system' as const,
-              content: `💡 智能提示：系统建议使用路径 "${suggestedPath}"，请直接使用此路径，避免手动浏览文件系统。`
-            };
-            llmMessages.push(pathHint);
-          }
-          
-          // 文件已存在处理
-          if (toolResult.error.includes('File already exists')) {
-            const overwriteHint = {
-              role: 'system' as const,
-              content: `💡 文件存在处理：可以使用edit_tool的"overwrite"选项或先删除文件再创建。`
-            };
-            llmMessages.push(overwriteHint);
-          }
-          
-          // bash_tool超时提示
-          if (toolResult.error.includes('Session setup timeout')) {
-            const bashHint = {
-              role: 'system' as const,
-              content: `💡 bash_tool超时：建议立即切换到edit_tool进行文件操作，以提高执行效率。`
-            };
-            llmMessages.push(bashHint);
-          }
-        }
-      } catch (e) {
-        // 忽略JSON解析错误
-      }
-    }
-    
-    // 添加上下文感知提示
-    if (stepNumber === 1 && this.workingDirectory) {
-      // 为第一步添加工作目录上下文
-      const contextMessage = {
-        role: 'system' as const,
-        content: `上下文信息：当前工作目录为 ${this.workingDirectory}。当需要绝对路径时，请直接使用此目录作为基础路径。`
-      };
-      llmMessages.push(contextMessage);
-    }
-    
-    // 增强的重复操作检测
-    if (this.trajectory.steps.length > 0) {
-      const recentSteps = this.trajectory.steps.slice(-4);
-      const toolCallHistory = recentSteps.flatMap(step => 
-        step.tool_calls.map(tc => tc.function.name)
-      ).filter(Boolean);
-      
-      // 检测连续相同工具调用
-      if (toolCallHistory.length >= 3) {
-        const lastThree = toolCallHistory.slice(-3);
-        const uniqueTools = new Set(lastThree);
-        
-        if (uniqueTools.size === 1) {
-          const repeatedTool = Array.from(uniqueTools)[0];
-          this.logger.warn(`检测到重复调用工具: ${repeatedTool}`);
-          
-          const warningMessage = {
-            role: 'system' as const,
-            content: `🚨 效率警告：连续调用${repeatedTool}工具${lastThree.length}次。建议：
-1. 重新评估策略，考虑使用其他工具
-2. 如果bash_tool失败，立即切换到edit_tool
-3. 利用错误信息中的路径建议
-4. 检查是否可以直接完成任务并调用complete_task`
-          };
-          llmMessages.push(warningMessage);
-        }
-      }
-      
-      // 检测工具失败模式
-      const recentFailures = recentSteps.filter(step => 
-        step.tool_results.some(result => !result.success)
-      );
-      
-      if (recentFailures.length >= 2) {
-        const strategyHint = {
-          role: 'system' as const,
-          content: `💡 策略优化：检测到多次工具失败。建议优先使用edit_tool进行文件操作，它比bash_tool更稳定可靠。`
-        };
-        llmMessages.push(strategyHint);
-      }
-    }
-    
-    // 添加步骤优化提示
-    if (stepNumber > 6) {
-      const optimizationHint = {
-        role: 'system' as const,
-        content: `⚡ 步骤优化提示：已经执行了${stepNumber}个步骤。请检查是否在重复相同的操作。如果是，请重新评估策略并选择不同的方法。考虑是否可以直接调用complete_task完成任务。`
-      };
-      llmMessages.push(optimizationHint);
-    }
+    console.log("workingDirectory====>",this.workingDirectory)
+ 
+ 
     
     // 调用LLM进行推理
     const response = await this.llmClient.chat(
@@ -346,27 +248,7 @@ export abstract class BaseAgent {
       return true;
     }
     
-    // 检查是否有重复的工具调用模式
-    const recentSteps = this.trajectory.steps.slice(-3); // 检查最近3个步骤
-    const currentToolNames = reasoningResponse.tool_calls?.map(tc => tc.function.name) || [];
-    
-    let repetitionDetected = false;
-    if (recentSteps.length >= 2) {
-      const recentToolPatterns = recentSteps.map(step => 
-        step.tool_calls.map(tc => tc.function.name).join(',')
-      );
-      const currentPattern = currentToolNames.join(',');
-      
-      if (recentToolPatterns.includes(currentPattern)) {
-        repetitionDetected = true;
-        this.logger.warn('检测到重复的工具调用模式', {
-          currentPattern,
-          recentPatterns: recentToolPatterns
-        });
-      }
-    }
-    
-    // 创建当前步骤记录
+   //当前步骤记录
     const currentStep: AgentStep = {
       step_id: randomUUID(),
       task: this.trajectory.task,
@@ -377,9 +259,8 @@ export abstract class BaseAgent {
       timestamp: new Date().getTime(),
     };
     
-    // 存储推理响应内容和重复检测信息
+    // 存储推理响应内容
     (currentStep as any).llm_response_content = reasoningResponse.content || '';
-    (currentStep as any).repetition_detected = repetitionDetected;
     
     this.trajectory.steps.push(currentStep);
     
@@ -407,22 +288,13 @@ export abstract class BaseAgent {
         });
       }
     }
-    
-    // 如果检测到重复，添加优化提示
-    if (repetitionDetected) {
-      messages.push({
-        role: 'system',
-        content: '检测到重复的操作模式。请重新评估当前策略，尝试不同的方法或直接使用可用的信息来完成任务。'
-      });
-    }
+
     
     this.logger.debug('观察阶段完成，继续下一轮ReAct循环', {
-      repetitionDetected,
       toolResultsCount: toolResults.length
     });
     return false;
   }
-  // 移除旧的executeStep方法和其他不需要的方法
 
   protected convertToLLMMessages(messages: Message[]): LLMMessage[] {
     return messages.map(msg => ({
