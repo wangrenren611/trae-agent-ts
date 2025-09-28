@@ -4,26 +4,10 @@ import { ToolExecutor } from '../tools/base.js';
 import { Config, AgentTrajectory } from '../types/index.js';
 import { Logger } from '../utils/logging/logger.js';
 import {
-  Task,
   ExecutionPlan,
-  TaskStatus,
-  TaskPriority,
-  TaskType,
-  TaskPhase,
-  PlanStatus,
   ExecutionStrategy,
   PlanningOptions,
-  PlanAdjustmentOptions,
-  TaskExecutionContext,
-  PlanningAnalysis,
-  PlanExecutionEvent,
-  TaskResult,
-  ReasoningPath,
-  QualityMetrics,
-  PlanningMetadata,
-  ReasoningTechnique,
-  RiskLevel,
-  ComplexityLevel
+
 } from '../types/planning.js';
 import { randomUUID } from 'crypto';
 
