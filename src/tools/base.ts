@@ -130,31 +130,37 @@ export class ToolCallExecutor {
 
   async executeToolCall(toolCall: ToolCall, context: ToolExecutionContext): Promise<ToolResult> {
     const normalizedName = this.normalizeName(toolCall.function.name);
-    
+
     if (!this.tools.has(normalizedName)) {
       const availableTools = Array.from(this.tools.keys());
       return {
         success: false,
         error: `Tool '${toolCall.function.name}' not found. Available tools: ${JSON.stringify(availableTools)}`,
+        tool_call_id: toolCall.id, // 添加tool_call_id
       };
     }
 
     const tool = this.tools.get(normalizedName)!;
-    
+
     try {
       let parsedArgs: Record<string, unknown> = {};
       if (toolCall.function.arguments) {
-        parsedArgs = typeof toolCall.function.arguments === 'string' 
-          ? JSON.parse(toolCall.function.arguments) 
+        parsedArgs = typeof toolCall.function.arguments === 'string'
+          ? JSON.parse(toolCall.function.arguments)
           : toolCall.function.arguments;
       }
-      
+
       const result = await tool.execute(parsedArgs, context);
-      return result;
+      // 添加tool_call_id到结果中
+      return {
+        ...result,
+        tool_call_id: toolCall.id
+      };
     } catch (error) {
       return {
         success: false,
         error: `Error executing tool '${toolCall.function.name}': ${error instanceof Error ? error.message : String(error)}`,
+        tool_call_id: toolCall.id // 添加tool_call_id
       };
     }
   }

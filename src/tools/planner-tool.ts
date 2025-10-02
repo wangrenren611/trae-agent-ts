@@ -23,7 +23,13 @@ export class PlannerTool extends ToolExecutor {
   private currentPlan: ExecutionPlan | null = null;
 
   constructor() {
-    super('planner_tool', {} as ToolDefinition);
+    // 延迟初始化definition，先创建空的ToolDefinition
+    const tempDefinition: ToolDefinition = {
+      name: 'planner_tool',
+      description: '',
+      parameters: { type: 'object', properties: {}, required: [] }
+    };
+    super('planner_tool', tempDefinition);
   }
 
   override definition: ToolDefinition = {
@@ -32,24 +38,29 @@ export class PlannerTool extends ToolExecutor {
 
 核心功能：
 - create_plan: 创建新的执行计划
+- create_plan_with_tasks: 创建计划并批量添加所有任务（推荐，最高效）
 - get_plan: 获取当前计划详情
 - update_plan: 更新计划信息
 - delete_plan: 删除当前计划
-- add_task: 向计划添加新任务
+- add_task: 向计划添加新任务（单个任务，低效）
+- add_tasks: 批量向计划添加多个任务（推荐）
 - update_task: 更新任务状态和信息
 - get_next_task: 获取下一个待执行任务
 
 协作模式：
 - 执行智能体通过get_next_task获取待执行任务
 - 执行智能体通过update_task更新任务状态和结果
-- PlannerAgent通过此工具监控和调整整体计划`,
+- PlannerAgent通过此工具监控和调整整体计划
+
+效率提示：
+- 优先使用create_plan_with_tasks一次性完成计划和任务创建
+- 避免逐个add_task，使用add_tasks批量添加更高效`,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          description: '要执行的操作类型',
-          required: true
+          description: '要执行的操作类型'
         },
         objective: {
           type: 'string',
@@ -71,9 +82,9 @@ export class PlannerTool extends ToolExecutor {
             id: { type: 'string', description: '任务ID（更新时必需）' },
             title: { type: 'string', description: '任务标题' },
             description: { type: 'string', description: '任务描述' },
-            priority: { 
-              type: 'string', 
-              description: '任务优先级' 
+            priority: {
+              type: 'string',
+              description: '任务优先级'
             },
             status: {
               type: 'string',
@@ -81,17 +92,38 @@ export class PlannerTool extends ToolExecutor {
             },
             dependencies: {
               type: 'array',
-              description: '依赖的任务ID列表'
+              description: '依赖的任务ID列表',
+              items: { type: 'string', description: '任务ID' }
             },
             estimated_duration: {
               type: 'number',
               description: '估算执行时间（分钟）'
             }
           }
+        },
+        tasks: {
+          type: 'array',
+          description: '任务列表（create_plan_with_tasks或add_tasks时使用）',
+          items: {
+            type: 'object',
+            description: '单个任务定义',
+            properties: {
+              title: { type: 'string', description: '任务标题' },
+              description: { type: 'string', description: '任务描述' },
+              priority: { type: 'string', description: '任务优先级' },
+              dependencies: {
+                type: 'array',
+                description: '依赖的任务ID列表',
+                items: { type: 'string', description: '任务ID' }
+              },
+              estimated_duration: { type: 'number', description: '估算执行时间（分钟）' }
+            },
+            required: ['title', 'description']
+          } as any
         }
       },
       required: ['action']
-    }
+    } as any
   };
 
   async execute(params: Record<string, unknown>, context: ToolExecutionContext): Promise<ToolResult> {
@@ -101,6 +133,8 @@ export class PlannerTool extends ToolExecutor {
       switch (action) {
         case 'create_plan':
           return await this.createPlan(params, context);
+        case 'create_plan_with_tasks':
+          return await this.createPlanWithTasks(params, context);
         case 'get_plan':
           return await this.getPlan(params, context);
         case 'update_plan':
@@ -109,6 +143,8 @@ export class PlannerTool extends ToolExecutor {
           return await this.deletePlan(params, context);
         case 'add_task':
           return await this.addTask(params, context);
+        case 'add_tasks':
+          return await this.addTasks(params, context);
         case 'update_task':
           return await this.updateTask(params, context);
         case 'get_next_task':
@@ -126,7 +162,7 @@ export class PlannerTool extends ToolExecutor {
    */
   private async createPlan(params: Record<string, unknown>, context: ToolExecutionContext): Promise<ToolResult> {
     const { objective } = params;
-    
+
     if (!objective || typeof objective !== 'string') {
       return this.createErrorResult('创建计划需要提供目标描述');
     }
@@ -163,6 +199,112 @@ export class PlannerTool extends ToolExecutor {
         status: this.currentPlan.status,
         created_at: this.currentPlan.createdAt,
         task_count: this.currentPlan.tasks.length
+      }
+    });
+  }
+
+  /**
+   * 创建执行计划并批量添加任务（最高效的方法）
+   */
+  private async createPlanWithTasks(params: Record<string, unknown>, context: ToolExecutionContext): Promise<ToolResult> {
+    const { objective, tasks } = params;
+
+    if (!objective || typeof objective !== 'string') {
+      return this.createErrorResult('创建计划需要提供目标描述');
+    }
+
+    if (!tasks || !Array.isArray(tasks)) {
+      return this.createErrorResult('create_plan_with_tasks需要提供任务列表');
+    }
+
+    if (tasks.length === 0) {
+      return this.createErrorResult('任务列表不能为空');
+    }
+
+    if (tasks.length > 10) {
+      return this.createErrorResult('任务数量不能超过10个，建议拆分为多个子计划');
+    }
+
+    // 验证每个任务的数据
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      if (!task || typeof task !== 'object') {
+        return this.createErrorResult(`任务${i + 1}数据无效`);
+      }
+      const taskInfo = task as any;
+      if (!taskInfo.title || !taskInfo.description) {
+        return this.createErrorResult(`任务${i + 1}缺少标题或描述`);
+      }
+    }
+
+    // 创建基础计划结构
+    this.currentPlan = {
+      id: randomUUID(),
+      title: `执行计划：${objective}`,
+      description: `针对目标"${objective}"制定的执行计划`,
+      objective: objective as string,
+      status: 'ready',
+      tasks: [],
+      strategy: {
+        allowParallel: true,
+        maxParallelTasks: 3,
+        failureHandling: 'retry',
+        autoRetry: true,
+        maxRetries: 2,
+        retryInterval: 30,
+        timeout: 60
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      progress: 0,
+      executionHistory: []
+    };
+
+    // 批量创建任务
+    const createdTasks: any[] = [];
+    for (let i = 0; i < tasks.length; i++) {
+      const taskInfo = tasks[i] as any;
+
+      const newTask: Task = {
+        id: randomUUID(),
+        title: taskInfo.title,
+        description: taskInfo.description,
+        type: 'other',
+        status: 'pending',
+        phase: 'planning',
+        priority: taskInfo.priority || 'medium',
+        dependencies: taskInfo.dependencies || [],
+        estimatedDuration: taskInfo.estimated_duration || 15,
+        createdAt: new Date()
+      };
+
+      if (this.currentPlan) {
+        this.currentPlan.tasks.push(newTask);
+      }
+      createdTasks.push({
+        id: newTask.id,
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        status: newTask.status,
+        estimated_duration: newTask.estimatedDuration
+      });
+    }
+
+    return this.createSuccessResult({
+      message: `计划创建成功，已添加${tasks.length}个任务`,
+      plan: {
+        id: this.currentPlan.id,
+        title: this.currentPlan.title,
+        objective: this.currentPlan.objective,
+        status: this.currentPlan.status,
+        created_at: this.currentPlan.createdAt,
+        task_count: this.currentPlan.tasks.length
+      },
+      tasks: createdTasks,
+      plan_summary: {
+        total_tasks: this.currentPlan.tasks.length,
+        pending_tasks: this.currentPlan.tasks.filter(t => t.status === 'pending').length
       }
     });
   }
@@ -224,7 +366,9 @@ export class PlannerTool extends ToolExecutor {
     if (planInfo.description) this.currentPlan.description = planInfo.description;
     if (planInfo.status) this.currentPlan.status = planInfo.status;
     
-    this.currentPlan.updatedAt = new Date();
+    if (this.currentPlan) {
+        this.currentPlan.updatedAt = new Date();
+      }
 
     return this.createSuccessResult({
       message: '计划更新成功',
@@ -268,7 +412,7 @@ export class PlannerTool extends ToolExecutor {
     }
 
     const taskInfo = task_data as any;
-    
+
     const newTask: Task = {
       id: randomUUID(),
       title: taskInfo.title || '新任务',
@@ -282,8 +426,12 @@ export class PlannerTool extends ToolExecutor {
       createdAt: new Date()
     };
 
-    this.currentPlan.tasks.push(newTask);
-    this.currentPlan.updatedAt = new Date();
+    if (this.currentPlan) {
+        this.currentPlan.tasks.push(newTask);
+      }
+    if (this.currentPlan) {
+        this.currentPlan.updatedAt = new Date();
+      }
 
     return this.createSuccessResult({
       message: '任务添加成功',
@@ -294,6 +442,84 @@ export class PlannerTool extends ToolExecutor {
         priority: newTask.priority,
         status: newTask.status
       },
+      plan_summary: {
+        total_tasks: this.currentPlan.tasks.length,
+        pending_tasks: this.currentPlan.tasks.filter(t => t.status === 'pending').length
+      }
+    });
+  }
+
+  /**
+   * 批量添加任务（推荐方法）
+   */
+  private async addTasks(params: Record<string, unknown>, context: ToolExecutionContext): Promise<ToolResult> {
+    if (!this.currentPlan) {
+      return this.createErrorResult('没有活动的执行计划');
+    }
+
+    const { tasks } = params;
+    if (!tasks || !Array.isArray(tasks)) {
+      return this.createErrorResult('add_tasks需要提供任务列表');
+    }
+
+    if (tasks.length === 0) {
+      return this.createErrorResult('任务列表不能为空');
+    }
+
+    if (tasks.length > 10) {
+      return this.createErrorResult('批量添加任务数量不能超过10个');
+    }
+
+    // 验证每个任务的数据
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      if (!task || typeof task !== 'object') {
+        return this.createErrorResult(`任务${i + 1}数据无效`);
+      }
+      const taskInfo = task as any;
+      if (!taskInfo.title || !taskInfo.description) {
+        return this.createErrorResult(`任务${i + 1}缺少标题或描述`);
+      }
+    }
+
+    // 批量创建任务
+    const createdTasks: any[] = [];
+    for (let i = 0; i < tasks.length; i++) {
+      const taskInfo = tasks[i] as any;
+
+      const newTask: Task = {
+        id: randomUUID(),
+        title: taskInfo.title,
+        description: taskInfo.description,
+        type: 'other',
+        status: 'pending',
+        phase: 'planning',
+        priority: taskInfo.priority || 'medium',
+        dependencies: taskInfo.dependencies || [],
+        estimatedDuration: taskInfo.estimated_duration || 15,
+        createdAt: new Date()
+      };
+
+      if (this.currentPlan) {
+        this.currentPlan.tasks.push(newTask);
+      }
+      createdTasks.push({
+        id: newTask.id,
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        status: newTask.status,
+        estimated_duration: newTask.estimatedDuration
+      });
+    }
+
+    if (this.currentPlan) {
+        this.currentPlan.updatedAt = new Date();
+      }
+
+    return this.createSuccessResult({
+      message: `成功添加${tasks.length}个任务`,
+      tasks: createdTasks,
       plan_summary: {
         total_tasks: this.currentPlan.tasks.length,
         pending_tasks: this.currentPlan.tasks.filter(t => t.status === 'pending').length
@@ -341,7 +567,9 @@ export class PlannerTool extends ToolExecutor {
     if (taskInfo.dependencies) task.dependencies = taskInfo.dependencies;
     if (taskInfo.estimated_duration) task.estimatedDuration = taskInfo.estimated_duration;
 
-    this.currentPlan.updatedAt = new Date();
+    if (this.currentPlan) {
+        this.currentPlan.updatedAt = new Date();
+      }
     
     // 更新计划进度
     this.updatePlanProgress();

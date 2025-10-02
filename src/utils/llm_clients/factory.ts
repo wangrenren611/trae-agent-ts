@@ -8,7 +8,7 @@ import { GLMClient } from './glm-client.js';
 
 export function createLLMClient(provider: LLMProvider): LLMClient {
   const {
-    name,
+    provider: providerName,
     api_key,
     base_url,
     model,
@@ -17,11 +17,15 @@ export function createLLMClient(provider: LLMProvider): LLMClient {
     top_p,
   } = provider;
 
-  if (!api_key) {
-    throw new Error(`API key is required for ${name} provider`);
+  if (!providerName) {
+    throw new Error('Provider name is required');
   }
 
-  switch (name.toLowerCase()) {
+  if (!api_key) {
+    throw new Error(`API key is required for ${providerName} provider`);
+  }
+
+  switch (providerName.toLowerCase()) {
     case 'anthropic':
       return new AnthropicClient(
         api_key,
@@ -61,16 +65,6 @@ export function createLLMClient(provider: LLMProvider): LLMClient {
         base_url
       );
 
-    case 'deepseek':
-      return new DeepSeekClient(
-        api_key,
-        model || 'deepseek-chat',
-        max_tokens,
-        temperature,
-        top_p,
-        base_url
-      );
-
     case 'glm':
       return new GLMClient(
         api_key,
@@ -82,7 +76,7 @@ export function createLLMClient(provider: LLMProvider): LLMClient {
       );
 
     default:
-      throw new Error(`Unsupported LLM provider: ${name}`);
+      throw new Error(`Unsupported LLM provider: ${providerName}`);
   }
 }
 

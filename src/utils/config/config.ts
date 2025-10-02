@@ -1,6 +1,6 @@
 import { readFile, access } from 'fs/promises';
 import { resolve, join } from 'path';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import { Config, ConfigSchema, DeepPartial } from '../../types/index.js';
 
 export { Config };

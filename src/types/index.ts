@@ -49,6 +49,8 @@ export interface ToolResult {
   error?: string;
   stdout?: string;
   stderr?: string;
+  tool_call_id?: string; // 添加工具调用ID用于精确匹配
+  execution_time?: number; // 添加执行时间信息
 }
 
 export interface ToolExecutionContext {
@@ -66,6 +68,9 @@ export interface AgentStep {
   tool_results: ToolResult[];
   completed: boolean;
   timestamp: number;
+  llm_response_content?: string; // 添加LLM响应内容
+  step_duration?: number; // 添加步骤执行时间
+  error?: string; // 添加步骤错误信息
 }
 
 export interface AgentTrajectory {
@@ -81,7 +86,7 @@ export interface AgentTrajectory {
 
 // LLM types
 export interface LLMProvider {
-  name: string;
+  provider: string;  // 统一使用 provider 而不是 name
   api_key?: string;
   base_url?: string;
   model: string;
@@ -194,6 +199,59 @@ export class ConfigurationError extends Error {
     super(message);
     this.name = 'ConfigurationError';
   }
+}
+
+// 特定工具结果类型
+export interface CompleteTaskResult {
+  task_completed: boolean;
+  result: string;
+  summary: string;
+  completion_time: string;
+}
+
+export interface PlannerToolResult {
+  message: string;
+  plan?: {
+    id: string;
+    title: string;
+    objective: string;
+    status: string;
+    created_at: Date;
+    task_count: number;
+    [key: string]: any;
+  };
+  task?: {
+    id: string;
+    title: string;
+    description: string;
+    priority: string;
+    status: string;
+    [key: string]: any;
+  };
+  tasks?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    priority: string;
+    status: string;
+    estimated_duration?: number;
+    [key: string]: any;
+  }>;
+  plan_summary?: {
+    total_tasks: number;
+    pending_tasks: number;
+    [key: string]: any;
+  };
+}
+
+export interface SequentialThinkingResult {
+  thoughts: Array<{
+    thought: string;
+    thought_number: number;
+    total_thoughts: number;
+  }>;
+  conclusion?: string;
+  next_action?: string;
 }
 
 // Utility types

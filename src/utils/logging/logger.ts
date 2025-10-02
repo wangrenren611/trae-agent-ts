@@ -1,15 +1,16 @@
-import pino from 'pino';
 import { Config } from '../../types/index.js';
 
-export class Logger {
-  private logger: pino.Logger;
+const pino = require('pino');
 
-  constructor(logger: pino.Logger) {
+export class Logger {
+  private logger: any;
+
+  constructor(logger: any) {
     this.logger = logger;
   }
 
   static create(config: Config['logging']): Logger {
-    const options: pino.LoggerOptions = {
+    const options: any = {
       level: config?.level || 'info',
       transport: config?.format === 'pretty' ? {
         target: 'pino-pretty',

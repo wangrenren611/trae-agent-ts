@@ -22,7 +22,7 @@ export class Agent {
 
     // Create LLM client
     const llmClient = createLLMClient({
-      name: config.llm.provider,
+      provider: config.llm.provider,
       api_key: config.llm.api_key,
       base_url: config.llm.base_url,
       model: config.llm.model,

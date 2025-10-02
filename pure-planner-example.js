@@ -36,11 +36,43 @@ async function purePlannerExample() {
 
     // 2. 创建PlannerAgent（纯规划）
     console.log('\n🧠 步骤2：创建PlannerAgent（纯规划智能体）');
+
+    // 为PlannerAgent创建专门只包含规划工具的工具集合
+    const planningTools = tools.filter(tool => {
+      const toolName = tool.name.toLowerCase();
+      return toolName.includes('planner') ||
+             toolName.includes('sequential') ||
+             toolName.includes('thinking') ||
+             toolName.includes('complete_task');
+    });
+
+    console.log(`✅ 过滤后的规划工具数量: ${planningTools.length}`);
+    console.log(`工具列表: ${planningTools.map(t => t.name).join(', ')}`);
+
+    // 调试：显示所有可用工具
+    console.log(`🔍 所有可用工具: ${tools.map(t => t.name).join(', ')}`);
+
+    // 检查是否有 sequential_thinking 相关工具
+    const sequentialThinkingTools = tools.filter(tool => {
+      const toolName = tool.name.toLowerCase();
+      return toolName.includes('sequential') || toolName.includes('thinking');
+    });
+    console.log(`🔍 Sequential Thinking 工具: ${sequentialThinkingTools.map(t => t.name).join(', ')}`);
+
+    // 创建纯规划配置
+    const planningConfig = {
+      ...config,
+      agent: {
+        ...config.agent,
+        tools: ['planner_tool', 'sequential_thinking_tool', 'complete_task']
+      }
+    };
+
     const plannerAgent = new PlannerAgent(
       'planner-001',
       llmClient,
-      tools,
-      config,
+      planningTools,
+      planningConfig,
       logger,
       process.cwd(),
       {
@@ -67,7 +99,7 @@ async function purePlannerExample() {
 
 
     if (plan) {
-      console.log('\n📊 规划结果：');
+      console.log('\n📊 规划结果：',JSON.stringify(plan, null, 2));
       console.log(`计划ID：${plan.id}`);
       console.log(`状态：${plan.status}`);
       console.log(`任务总数：${plan.tasks.length}`);
